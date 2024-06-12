@@ -403,7 +403,7 @@ def SHO_double(x, A, B, C):
 
 # -- PLOTTING FUNCTIONS -- #
 
-def plot_walkers(samples, nburnin=None, labels=None, histogram=True):
+def plot_walkers(samples, nburnin=None, labels=None, histogram=True, saveplot_dir=None): # Jess added saveplot_dir
     """
     Plot the walkers to check if they are burning in.
 
@@ -452,8 +452,12 @@ def plot_walkers(samples, nburnin=None, labels=None, histogram=True):
             ax1.spines['bottom'].set_visible(False)
             ax1.spines['top'].set_visible(False)
 
+        if saveplot_dir:
+            print('Saving plot_walkers...')
+            plt.savefig(saveplot_dir+'plot_walkers'+str(s)+'.png', dpi=350)
 
-def plot_corner(samples, labels=None, quantiles=[0.16, 0.5, 0.84]):
+
+def plot_corner(samples, labels=None, quantiles=[0.16, 0.5, 0.84], saveplot_dir=None): # Jess added saveplot_dir
     """
     A wrapper for DFM's corner plots.
 
@@ -465,3 +469,6 @@ def plot_corner(samples, labels=None, quantiles=[0.16, 0.5, 0.84]):
     import corner
     corner.corner(samples, labels=labels, title_fmt='.4f', bins=30,
                   quantiles=quantiles, show_titles=True)
+    if saveplot_dir:
+        print('Saving plot_corner...')
+        plt.savefig(saveplot_dir+'plot_corner.png', dpi=350)

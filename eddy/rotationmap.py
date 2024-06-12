@@ -81,7 +81,7 @@ class rotationmap(datacube):
     def fit_map(self, p0, params, r_min=None, r_max=None, optimize=True,
                 nwalkers=None, nburnin=300, nsteps=100, scatter=1e-3,
                 plots=None, returns=None, pool=None, mcmc='emcee',
-                mcmc_kwargs=None, niter=1):
+                mcmc_kwargs=None, niter=1, saveplot_dir=None): # Jess added saveplot_dir
         """
         Fit a rotation profile to the data. Note that for a disk with
         a non-zero height, the sign of the inclination dictates the direction
@@ -242,19 +242,21 @@ class rotationmap(datacube):
                 walkers = sampler.chain.T
             else:
                 walkers = np.rollaxis(sampler.chain.copy(), 2)
-            plot_walkers(walkers, nburnin[-1], labels)
+            plot_walkers(walkers, nburnin[-1], labels, saveplot_dir=saveplot_dir)
         if 'corner' in plots:
-            plot_corner(samples, labels)
+            plot_corner(samples, labels, saveplot_dir=saveplot_dir)
         if 'bestfit' in plots:
             self.plot_model(samples=samples,
                             params=params,
                             mask=self.ivar,
-                            draws=10)
+                            draws=10,
+                            saveplot_dir=saveplot_dir)
         if 'residual' in plots:
             self.plot_model_residual(samples=samples,
                                      params=params,
                                      mask=self.ivar,
-                                     draws=10)
+                                     draws=10,
+                                     saveplot_dir=saveplot_dir)
 
         # Generate the output.
 
@@ -374,7 +376,7 @@ class rotationmap(datacube):
 
         rpnts, rbins = self._get_radial_bins(rpnts=rpnts,
                                              rbins=rbins)
-        
+
         rvals, pvals = self.disk_coords(x0=x0,
                                         y0=y0,
                                         inc=inc,
@@ -502,7 +504,7 @@ class rotationmap(datacube):
 
             # Combine the values using a weighted average if niter > 1.
             # velo_tmp.shape = [niter, 4]
-    
+
             velo_tmp = np.array(velo_tmp)
             dvelo_tmp = np.array(dvelo_tmp)
             if niter == 1:
@@ -520,7 +522,7 @@ class rotationmap(datacube):
                 dvelo += [wstd]
             else:
                 raise ValueError("Unknown `niter` value.")
-            
+
         # Combine all the results into [4, rpnts] shaped arrays to deproject.
 
         velo = np.atleast_2d(np.squeeze(velo)).T
@@ -538,7 +540,7 @@ class rotationmap(datacube):
                               velo[1] * -np.sin(np.radians(inc)),
                               velo[2] * -np.cos(np.radians(inc)),
                               velo[3]])
-        
+
         model = self._evaluate_annuli_model(rpnts=rpnts,
                                             velo_proj=velo_proj,
                                             rvals=rvals,
@@ -814,7 +816,7 @@ class rotationmap(datacube):
         """
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-    
+
         if vmin is None or vmax is None:
             vmin_tmp, vmax_tmp = np.nanpercentile(self.data, [2, 98])
             vmax_tmp = max(abs(vmin_tmp - self.vlsr), abs(vmax_tmp - self.vlsr))
@@ -1164,7 +1166,7 @@ class rotationmap(datacube):
 
         else:
             raise ValueError("'draws' must be a float or integer.")
-        
+
     def evaluate_models_vortex(self, samples=None, params=None, draws=50,
             collapse_func=np.median, frame=None):
         """
@@ -1201,11 +1203,11 @@ class rotationmap(datacube):
 
         if params is None:
             raise ValueError("Must provide model parameters dictionary.")
-        
+
         # NOTE: Calculate the coordinates needed for this. Note that this won't
         # be exactly the same draws (if draws > 1) but for a well sampled
         # posterior and a large enough draw value this should be OK...
-        
+
         rvals, tvals, _ = self.evaluate_models(samples=samples,
                                                params=params,
                                                draws=draws,
@@ -1215,11 +1217,11 @@ class rotationmap(datacube):
 
         if samples is None:
             verified_params = self.verify_params_dictionary(params.copy())
-            return self._make_model_vortex(rvals=rvals, 
+            return self._make_model_vortex(rvals=rvals,
                                            tvals=tvals,
                                            params=verified_params,
                                            frame=frame)
-        
+
         # Now do a random number of draws. Check to make sure the `params`
         # dictionary has the same number of free parameters as there are in
         # `samples`.
@@ -1238,18 +1240,18 @@ class rotationmap(datacube):
             models = []
             for idx in np.random.randint(0, samples.shape[0], draws):
                 tmp = self._populate_dictionary(samples[idx], verified_params)
-                models += [self._make_model_vortex(rvals=rvals, 
+                models += [self._make_model_vortex(rvals=rvals,
                                                    tvals=tvals,
                                                    params=tmp,
                                                    frame=frame)]
             return collapse_func(models, axis=0)
-        
+
         # Take a percentile of the samples.
 
         elif isinstance(draws, float):
             tmp = np.percentile(samples, draws, axis=0)
             tmp = self._populate_dictionary(tmp, verified_params)
-            self._make_model(rvals=rvals, 
+            self._make_model(rvals=rvals,
                              tvals=tvals,
                              params=tmp,
                              frame=frame)
@@ -1258,7 +1260,7 @@ class rotationmap(datacube):
 
         else:
             raise ValueError("'draws' must be a float or integer.")
-        
+
     def save_model(self, samples=None, params=None, model=None, filename=None,
                    overwrite=True):
         """
@@ -1412,7 +1414,7 @@ class rotationmap(datacube):
             taper = np.exp(-np.power(taper, 2.0))
             vpow *= np.where(rvals <= r_p, 1.0, taper)
         return vpow
-    
+
     def _make_model_vortex(self, rvals, tvals, params, frame=None):
         """
         Vortex velocity profile projected onto the requested frame. Can return
@@ -1448,7 +1450,7 @@ class rotationmap(datacube):
             # Shift in the polar angle.
 
             dtheta = i * 2.0 * np.pi
-            tvals_tmp = tvals + dtheta 
+            tvals_tmp = tvals + dtheta
 
             # (x_tmp, y_tmp) describe the vortex cartesian frame.
 
@@ -1529,7 +1531,7 @@ class rotationmap(datacube):
 
         vphi = params['vfunc'](rvals, tvals, zvals, params)
         vphi_proj = self._proj_vphi(vphi, tvals, params)
-        if params['vortex']:        
+        if params['vortex']:
             vvor_proj = self._make_model_vortex(rvals, tvals, params)
         else:
             vvor_proj = 0.0
@@ -1579,7 +1581,7 @@ class rotationmap(datacube):
     def remove_hot_pixels(self, npix=2, nsigma=1.0, niter=1, replace=True):
         """
         Remove hot pixels from the data. Hot pixels are identified by deviating
-        from the mean of the region +\- `npix` by an amount of at least `nsigma` 
+        from the mean of the region +\- `npix` by an amount of at least `nsigma`
         times the standard deviation of the region. These hot pixels are
         replaced by interpolated (using a box kernel convolution) values.
 
@@ -1601,7 +1603,7 @@ class rotationmap(datacube):
         data_tmp = self.data.copy()
 
         for _ in range(niter):
-        
+
             # Cycle through each pixel and identify the hot pixels.
 
             coldpix = np.ones(data_tmp.shape) * np.nan
@@ -1613,14 +1615,14 @@ class rotationmap(datacube):
                     region_std = np.nanstd(region)
                     if abs(point - region_mu) < (nsigma * region_std):
                         coldpix[yi, xi] = point
-                        
+
             # Convolve, interpolating the NaN value, and re-mask based on the
-            # old data. 
-            
+            # old data.
+
             hotpix = np.logical_and(np.isfinite(self.data), np.isnan(coldpix))
             coldpix = convolve(coldpix, Box2DKernel(2*npix+1))
             data_tmp = np.where(hotpix, coldpix, data_tmp)
-        
+
         # Either replace the attached data or return as an array.
 
         if not replace:
@@ -1885,7 +1887,7 @@ class rotationmap(datacube):
 
     def plot_velocity_profiles(self, rpnts, velo, dvelo):
         """
-        Plot the velocity profiles. The `velo` array must specify 
+        Plot the velocity profiles. The `velo` array must specify
         ``[v_phi, v_r, v_z, v_lsr]`` in that order.
 
         Args:
@@ -1918,7 +1920,7 @@ class rotationmap(datacube):
         std = np.nanpercentile(v_rad, [16, 84])
         std = 0.5 * (std[1] - std[0])
         v_rad_ylim = (-3.0 * std, 3.0 * std)
- 
+
         axs[1].errorbar(rpnts, v_rad, dv_rad, fmt='-o', ms=3)
         axs[1].set_xticklabels([])
         axs[1].set_ylabel(r'$v_{\rm r}$' + ' (m/s)')
@@ -1966,7 +1968,7 @@ class rotationmap(datacube):
 
     def plot_model(self, samples=None, params=None, model=None, draws=0.5,
                    mask=None, ax=None, imshow_kwargs=None, cb_label=None,
-                   return_fig=False):
+                   return_fig=False, saveplot_dir=None):
         """
         Plot a v0 model using the same scalings as the plot_data() function.
 
@@ -2037,10 +2039,13 @@ class rotationmap(datacube):
 
         if return_fig:
             return fig
+        if saveplot_dir:
+            print('Saving plot_model...')
+            plt.savefig(saveplot_dir+'plot_model.png', dpi=350)
 
     def plot_model_residual(self, samples=None, params=None, model=None,
                             draws=0.5, mask=None, ax=None, imshow_kwargs=None,
-                            return_fig=False):
+                            return_fig=False, saveplot_dir=None):
         """
         Plot the residual from the provided model.
 
@@ -2107,6 +2112,9 @@ class rotationmap(datacube):
 
         if return_fig:
             return fig
+        if saveplot_dir:
+            print('Saving plot_model_residual...')
+            plt.savefig(saveplot_dir+'plot_model_residual.png', dpi=350)
 
     def plot_model_surface(self, samples, params,  plot_surface_kwargs=None,
                            mask_with_data=True, return_fig=True):
